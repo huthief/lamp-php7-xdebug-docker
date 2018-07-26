@@ -1,0 +1,44 @@
+version: '3'
+services:
+    php-apache:
+        container_name:
+            php7xdebug
+        build:
+            context: ./php-apache
+        ports:
+            #網站對應的網址。目前是直接對應實體機的80 port
+            #若要對應實體機的8080 port，要改為 - 8080:80
+            - 80:80
+           #不用對應9000 port 
+           # - 9000:9000
+        volumes:
+            - ./var/www/html:/var/www/html
+            - ./etc/php/php.ini:/usr/local/etc/php/php.ini
+            #- ./etc/php/docker-php-ext-xdebug.ini:/usr/local/etc/php/conf.d/docker-php-ext-xdebug.ini
+        links:
+            - mariadb
+        #environment:
+            ##這邊，{{YOUR_IP_ADDRESS}}請改為此container的gateway ip
+            ##remote_host
+        #environment:
+        #  XDEBUG_CONFIG: "remote_host=${HOST_IP}"
+    mariadb:
+        container_name:
+            php7xdebug_mariadb
+        image: mariadb:10.1
+        ports:
+            - 3306:3306
+        volumes:
+            - ./var/lib/mysql:/var/lib/mysql
+        environment:
+            TZ: "Asia/Taipei"
+            MYSQL_ALLOW_EMPTY_PASSWORD: "no"
+            MYSQL_ROOT_PASSWORD: "SET_YOUR_MYSQL_ROOT_PASSWORD"
+            MYSQL_USER: 'SET_MYSQL_NEW_ACCOUNT_ID'
+            MYSQL_PASSWORD: 'SET_MYSQL_NEW_ACCOUNT_ACCOUNT_PASSWORD'
+            MYSQL_DATABASE: 'SET_MYSQL_NEW_DATABASE'
+        #    MYSQL_ALLOW_EMPTY_PASSWORD: "no"
+        #    MYSQL_ROOT_PASSWORD: "!QAZ2wsx"
+        #    MYSQL_USER: 'phpmyadmin'
+        #    MYSQL_PASSWORD: '!QAZ2wsx'
+        #    MYSQL_DATABASE: 'phpmyadmin'
