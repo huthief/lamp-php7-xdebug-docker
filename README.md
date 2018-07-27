@@ -12,7 +12,7 @@
 
 #### 1. 指定XDebug remote_host IP
 
-修改檔案：./etc/php/php.ini 中 xdebug.remote_host 的值。請填入Docker Host IP為docker實體機的IP
+修改檔案:./etc/php/php.ini 中 xdebug.remote_host 的值。請填入Docker Host IP為docker實體機的IP
 
 ```yml
 ;這邊的remote_host要改為docker實體機的IP，不可用localhost
@@ -22,7 +22,7 @@ xdebug.remote_host=192.168.173.31
 
 #### 2. 設定MySQL帳號密碼
 
-修改檔案：docker-compose.yml 中 MYSQL相關參數。可指定啟動後的root密碼與要新增的帳號/密碼
+修改檔案:docker-compose.yml 中 MYSQL相關參數。可指定啟動後的root密碼與要新增的帳號/密碼
 
 ```yml
 MYSQL_ALLOW_EMPTY_PASSWORD: "no"
@@ -35,7 +35,7 @@ MYSQL_DATABASE: 'SET_MYSQL_NEW_DATABASE'
 #### 3. 設定container啟動後，container的80,3306 port，要對定到實體機的port
 
 目前預設80, 3306都是對應到實體機的80,33076 port
-若要變更對應，請自行修改docker-compose.yml 中 port相關參數。
+若要變更對應，請自行修改docker-compose.yml中port相關參數。
 
 ```yml
 ports:
@@ -93,8 +93,40 @@ $ docker-compose down
 
 2. 設定中斷點
 
-3. 切換VSCode到除錯Debug畫面（點左邊工具圖示第四個（有一支蟲的圖案）)
+3. 切換VSCode到除錯Debug畫面（點左邊工具圖示第四個（有一隻蟲的圖案）)
 
 4. 最上方「偵錯Debug)」請選擇「Listen for XDebug」，並按下綠色的執行按鈕
 
 5. 使用瀏覽器開啟要除錯的網頁，VSCode就會停在所設定的中斷點
+
+### 五、附錄
+
+#### MySQL相關作業
+
+1. 設定新增的帳號可以連線
+
+```shell
+//$GRANT ALL PRIVILEGES ON *.* TO 'phpmyadmin'@'localhost' IDENTIFIED BY '!QAZ2wsx';
+$GRANT ALL PRIVILEGES ON *.* TO 'SET_MYSQL_NEW_ACCOUNT_ID'@'localhost' IDENTIFIED BY 'SET_MYSQL_NEW_ACCOUNT_ACCOUNT_PASSWORD';
+$FLUSH PRIVILEGES;
+```
+
+2. 授權新增的帳號可以進行資料庫管理
+```shell
+$#docker exec -it <container_id> bash
+root@<container_id>:/# mysql -u root -p
+<輸入root密碼>
+MariaDB [(none)]> use mysql
+//update user set grant_priv='Y' where user='phpmyadmin';
+//讓phpmyadmin可以進行授權
+MariaDB [mysql]>update user set grant_priv='Y' where user='SET_MYSQL_NEW_ACCOUNT_ID';
+//授權phpmyadmin所有權限
+MariaDB [mysql]>GRANT ALL PRIVILEGES ON *.* TO 'SET_MYSQL_NEW_ACCOUNT_ID'@'localhost' IDENTIFIED BY 'SET_MYSQL_NEW_ACCOUNT_ACCOUNT_PASSWORD';
+//重新整理權限
+MariaDB [mysql]>FLUSH PRIVILEGES;
+```
+
+3. 使用phpmyadmin進行MySQL管理
+
+在docker-compose.yml最後面，我們加入的phpmyadmin的docker image，使得管理MySQL更為方便
+只要連線到 [http://localhost:8088/phpmyadmin](http://localhost:8088/phpmyadmin) 即可

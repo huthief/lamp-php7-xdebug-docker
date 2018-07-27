@@ -42,3 +42,17 @@ services:
         #    MYSQL_USER: 'phpmyadmin'
         #    MYSQL_PASSWORD: '!QAZ2wsx'
         #    MYSQL_DATABASE: 'phpmyadmin'
+    ##以下是另外加入phpmyadmin 的Docker，提供管理MySQL使用--------------------
+    ##設定port為8088，避免跟web  80 port衝突
+    phpmyadmin:
+        container_name:
+            php7xdebug_phpmyadmin
+        image: 
+            phpmyadmin/phpmyadmin:latest
+        ports:
+            - 8088:80
+        restart: 
+            always
+        external_links:
+            - mariadb:db
+    ##END OF 另外加入phpmyadmin 的Docker，提供管理MySQL使用--------------------
