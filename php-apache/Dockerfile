@@ -1,15 +1,19 @@
-# 20181105  加入composer v1.7.3
+# 20200414  更新至php 7.3 , xxdebug 2.9.4 ,composer 1.10.4
+# 20181105  加入composer v1.7.3 (設定參考來源：https://github.com/composer/docker)
 # 20181013	由php 7.1.20改為7.2.10
 # 20180727	加入docker-php-ext-install zip
 # 
 # ====================================
-FROM php:7.2.10-apache
+FROM php:7.3.16-apache
 RUN apt-get update && apt-get install -y \
         apt-utils \
         libfreetype6-dev \
         libjpeg62-turbo-dev \
         libmcrypt-dev \
-    && pecl install mcrypt-1.0.1 \
+        unzip \
+        zip \
+        libzip-dev \
+    && pecl install mcrypt-1.0.2 \
 	&& docker-php-ext-enable mcrypt \
     && docker-php-ext-install mysqli \
     && docker-php-ext-install pdo pdo_mysql \
@@ -24,20 +28,26 @@ RUN apt-get update && apt-get install -y \
 
 ENV COMPOSER_ALLOW_SUPERUSER 1
 ENV COMPOSER_HOME /tmp
-ENV COMPOSER_VERSION 1.7.3
+ENV COMPOSER_VERSION 1.10.4
 
-RUN curl --silent --fail --location --retry 3 --output /tmp/installer.php --url https://raw.githubusercontent.com/composer/getcomposer.org/b107d959a5924af895807021fcef4ffec5a76aa9/web/installer \
- && php -r " \
-    \$signature = '544e09ee996cdf60ece3804abc52599c22b1f40f4323403c44d44fdfdd586475ca9813a858088ffbc1f233e9b180f061'; \
-    \$hash = hash('SHA384', file_get_contents('/tmp/installer.php')); \
+RUN set -eux; \
+    curl --silent --fail --location --retry 3 --output /tmp/installer.php --url https://raw.githubusercontent.com/composer/getcomposer.org/cb19f2aa3aeaa2006c0cd69a7ef011eb31463067/web/installer; \
+    php -r " \
+    \$signature = '48e3236262b34d30969dca3c37281b3b4bbe3221bda826ac6a9a62d6444cdb0dcd0615698a5cbe587c3f0fe57a54d8f5'; \
+    \$hash = hash('sha384', file_get_contents('/tmp/installer.php')); \
     if (!hash_equals(\$signature, \$hash)) { \
-        unlink('/tmp/installer.php'); \
-        echo 'Integrity check failed, installer is either corrupt or worse.' . PHP_EOL; \
-        exit(1); \
-    }" \
- && php /tmp/installer.php --no-ansi --install-dir=/usr/bin --filename=composer --version=${COMPOSER_VERSION} \
- && composer --ansi --version --no-interaction \
- && rm -rf /tmp/* /tmp/.htaccess
+    unlink('/tmp/installer.php'); \
+    echo 'Integrity check failed, installer is either corrupt or worse.' . PHP_EOL; \
+    exit(1); \
+    }"; \
+    php /tmp/installer.php --no-ansi --install-dir=/usr/bin --filename=composer --version=${COMPOSER_VERSION}; \
+    composer --ansi --version --no-interaction; \
+    rm -f /tmp/installer.php; \
+    find /tmp -type d -exec chmod -v 1777 {} +
+
+#FILES DELETION
+RUN apt-get autoremove -y \
+    && rm -rf /tmp/*
 
 EXPOSE 80
 EXPOSE 9000
