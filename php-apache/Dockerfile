@@ -1,10 +1,11 @@
+# 20200610  更新至  php:7.3.18-apache ,composer 1.10.7 ，並加入redis連結
 # 20200414  更新至php 7.3 , xxdebug 2.9.4 ,composer 1.10.4
 # 20181105  加入composer v1.7.3 (設定參考來源：https://github.com/composer/docker)
 # 20181013	由php 7.1.20改為7.2.10
 # 20180727	加入docker-php-ext-install zip
 # 
 # ====================================
-FROM php:7.3.16-apache
+FROM php:7.3.18-apache
 RUN apt-get update && apt-get install -y \
         apt-utils \
         libfreetype6-dev \
@@ -13,8 +14,11 @@ RUN apt-get update && apt-get install -y \
         unzip \
         zip \
         libzip-dev \
+        redis-tools \
     && pecl install mcrypt-1.0.2 \
 	&& docker-php-ext-enable mcrypt \
+    && pecl install redis \
+    && docker-php-ext-enable redis \
     && docker-php-ext-install mysqli \
     && docker-php-ext-install pdo pdo_mysql \
     && docker-php-ext-install -j$(nproc) iconv \
@@ -28,7 +32,7 @@ RUN apt-get update && apt-get install -y \
 
 ENV COMPOSER_ALLOW_SUPERUSER 1
 ENV COMPOSER_HOME /tmp
-ENV COMPOSER_VERSION 1.10.4
+ENV COMPOSER_VERSION 1.10.7
 
 RUN set -eux; \
     curl --silent --fail --location --retry 3 --output /tmp/installer.php --url https://raw.githubusercontent.com/composer/getcomposer.org/cb19f2aa3aeaa2006c0cd69a7ef011eb31463067/web/installer; \
