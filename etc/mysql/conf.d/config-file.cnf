@@ -1,0 +1,6 @@
+[mysqld]
+default-time-zone = '+8:00'
+innodb-file-format = BARRACUDA
+innodb-large-prefix = ON
+innodb_file_per_table = 1
+innodb_max_dirty_pages_pct = 0
