@@ -1,3 +1,4 @@
+# 20201214  更新至 php:7.4.13-apache , composer 2.0.8
 # 20201121  更新至 php:7.3.24-apache ,composer 1.10.17
 # 20200610  更新至 php:7.3.18-apache ,composer 1.10.7 ，並加入redis連結
 # 20200414  更新至php 7.3 , xxdebug 2.9.4 ,composer 1.10.4
@@ -6,24 +7,29 @@
 # 20180727	加入docker-php-ext-install zip
 # 
 # ====================================
-FROM php:7.3.24-apache
+FROM php:7.4.13-apache
 RUN apt-get update && apt-get install -y \
     apt-utils \
     libfreetype6-dev \
     libjpeg62-turbo-dev \
     libmcrypt-dev \
+    zlib1g-dev \
+    libicu-dev \
+    g++ \
     unzip \
     zip \
     libzip-dev \
     redis-tools \
-    && pecl install mcrypt-1.0.2 \
+    && pecl install mcrypt-1.0.4 \
     && docker-php-ext-enable mcrypt \
     && pecl install redis \
+    && docker-php-ext-configure intl \
+    && docker-php-ext-install intl \
     && docker-php-ext-enable redis \
     && docker-php-ext-install mysqli \
     && docker-php-ext-install pdo pdo_mysql \
     && docker-php-ext-install -j$(nproc) iconv \
-    && docker-php-ext-configure gd --with-freetype-dir=/usr/include/ --with-jpeg-dir=/usr/include/ \
+    && docker-php-ext-configure gd --with-freetype=/usr/include/ --with-jpeg=/usr/include/ \
     && docker-php-ext-install -j$(nproc) gd \
     && docker-php-ext-install zip \
     && pecl install xdebug \
@@ -33,7 +39,7 @@ RUN apt-get update && apt-get install -y \
 
 ENV COMPOSER_ALLOW_SUPERUSER 1
 ENV COMPOSER_HOME /tmp
-ENV COMPOSER_VERSION 1.10.17
+ENV COMPOSER_VERSION 2.0.8
 
 RUN set -eux; \
     curl --silent --fail --location --retry 3 --output /tmp/installer.php --url https://raw.githubusercontent.com/composer/getcomposer.org/cb19f2aa3aeaa2006c0cd69a7ef011eb31463067/web/installer; \

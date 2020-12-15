@@ -9,6 +9,7 @@ services:
             #網站對應的網址。目前是直接對應實體機的80 port
             #若要對應實體機的8080 port，要改為 - 8080:80
             - 80:80
+            # - 6379:6379
            #不用對應9000 port 
            # - 9000:9000
         volumes:
@@ -17,6 +18,7 @@ services:
             #- ./etc/php/docker-php-ext-xdebug.ini:/usr/local/etc/php/conf.d/docker-php-ext-xdebug.ini
         links:
             - mariadb
+            - redis
         #environment:
             ##這邊，{{YOUR_IP_ADDRESS}}請改為此container的gateway ip
             ##remote_host
@@ -46,7 +48,7 @@ services:
         container_name:
             php7xdebug_redis
         # 這邊使用 amd64/redis 。若是一般環境請改用 redis
-        image: amd64/redis:6.0.4
+        image: amd64/redis:6.0.9
         ports:
             - 6379:6379
         volumes:
