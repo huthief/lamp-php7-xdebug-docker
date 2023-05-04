@@ -1,0 +1,100 @@
+# 20210716 將nginx-proxy 改爲  traefik
+# 202102-9 mariadb 由10.1更新為 10.4.17 , redis 更新為 6.0.10
+# 道親文書管理系統
+version: '3.8'
+services:
+    # 道親管理系統
+    cds-taomember:
+        container_name:
+            cds-taomember-dev
+        build:
+            context: ./php-apache
+        expose:
+            #網站對應的網址。目前是直接對應實體機的80 port
+            #若要對應實體機的8080 port，要改為 - 8080:80
+            - 80
+            - 443
+        volumes:
+            - ./var/www/html/taomember:/var/www/html
+            # - nfs-html-taomember:/var/www/html
+            - ./etc/php/php.ini:/usr/local/etc/php/php.ini
+            #- ./etc/php/docker-php-ext-xdebug.ini:/usr/local/etc/php/conf.d/docker-php-ext-xdebug.ini
+        links:
+            - mariadb
+        #networks: 
+            #- reverse-proxy
+        #    - ${PROXY_NETWORK}
+        environment:
+        #  VIRTUAL_HOST: cdsdev.fycd.info
+            - XDEBUG_CONFIG=remote_host=host.docker.internal
+        labels:
+            - "traefik.enable=true"
+            - "traefik.http.routers.${CDS_TRAEFIK_ROUTERS_NAME}.entrypoints=${HTTP_ENTRY_POINTS}"
+            # - "traefik.http.routers.${CDS_TRAEFIK_ROUTERS_NAME}.entrypoints=${HTTPS_ENTRY_POINTS}"
+            - "traefik.http.routers.${CDS_TRAEFIK_ROUTERS_NAME}.rule=Host(`${CDS_HOST_NAME}`)"
+            # - "traefik.http.routers.${CDS_TRAEFIK_ROUTERS_NAME}.tls.certresolver=${CERTIFICATION_RESOLVERS}"
+    # 文書系統
+    cds-docfile:
+        container_name:
+            cds-docfile-dev
+        build:
+            context: ./php-apache
+        expose:
+            #網站對應的網址。目前是直接對應實體機的80 port
+            #若要對應實體機的8080 port，要改為 - 8080:80
+            - 80
+            - 443
+        volumes:
+            - ./var/www/html/docfile:/var/www/html
+            - ./etc/php/php.ini:/usr/local/etc/php/php.ini
+            #- ./etc/php/docker-php-ext-xdebug.ini:/usr/local/etc/php/conf.d/docker-php-ext-xdebug.ini
+        #networks: 
+            #- bridge-network
+            #- reverse-proxy
+        #    - ${PROXY_NETWORK}
+        #environment:
+            ##這邊，{{YOUR_IP_ADDRESS}}請改為此container的gateway ip
+            ##remote_host
+        environment:
+        #  VIRTUAL_HOST: docfiledev.fycd.info
+            - XDEBUG_CONFIG=remote_host=host.docker.internal
+        labels:
+            - "traefik.enable=true"
+            - "traefik.http.routers.${DOCFILE_TRAEFIK_ROUTERS_NAME}.entrypoints=${HTTP_ENTRY_POINTS}"
+            # - "traefik.http.routers.${DOCFILE_TRAEFIK_ROUTERS_NAME}.entrypoints=${HTTPS_ENTRY_POINTS}"
+            - "traefik.http.routers.${DOCFILE_TRAEFIK_ROUTERS_NAME}.rule=Host(`${DOCFILE_HOST_NAME}`)"
+            # - "traefik.http.routers.${DOCFILE_TRAEFIK_ROUTERS_NAME}.tls.certresolver=${CERTIFICATION_RESOLVERS}"
+    # API
+    cds-api:
+        container_name:
+            cds-api-dev
+        build:
+            context: ./php-apache
+        expose:
+            #網站對應的網址。目前是直接對應實體機的80 port
+            #若要對應實體機的8080 port，要改為 - 8080:80
+            - 80
+            - 443
+        volumes:
+            - ./var/www/html/api:/var/www/html
+            # - nfs-html-api:/var/www/html
+            - ./etc/php/php.ini:/usr/local/etc/php/php.ini
+            #- ./etc/php/docker-php-ext-xdebug.ini:/usr/local/etc/php/conf.d/docker-php-ext-xdebug.ini
+        links:
+            - mariadb
+        #networks: 
+            #- bridge-network
+            #- reverse-proxy
+        #    - ${PROXY_NETWORK}
+        #environment:
+        #  VIRTUAL_HOST: apidev.fycd.info
+        labels:
+            - "traefik.enable=true"
+            - "traefik.http.routers.${API_TRAEFIK_ROUTERS_NAME}.entrypoints=${HTTP_ENTRY_POINTS}"
+            # - "traefik.http.routers.${API_TRAEFIK_ROUTERS_NAME}.entrypoints=${HTTPS_ENTRY_POINTS}"
+            - "traefik.http.routers.${API_TRAEFIK_ROUTERS_NAME}.rule=Host(`${API_HOST_NAME}`)"
+            # - "traefik.http.routers.${API_TRAEFIK_ROUTERS_NAME}.tls.certresolver=${CERTIFICATION_RESOLVERS}"
+networks:
+    default:
+        external: true
+        name: ${PROXY_NETWORK}

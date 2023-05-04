@@ -1,0 +1,2 @@
+#!/bin/bash
+exec wldo wp-cli --path="$(webhome)/" "$@"

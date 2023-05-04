@@ -1,0 +1,6 @@
+PHP Docker  Copyright (C) 2022-2023  %EMAIL%
+This program comes with ABSOLUTELY NO WARRANTY.
+This is free software, and you are welcome
+to redistribute it under certain conditions.
+
+To get support, please contact: %EMAIL%

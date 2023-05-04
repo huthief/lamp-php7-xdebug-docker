@@ -1,0 +1,51 @@
+# This file belongs to the project https://code.shin.company/php
+# Author:  Shin <shin@shin.company>
+# License: https://code.shin.company/php/blob/main/LICENSE
+################################################################################
+
+version: '3'
+services:
+
+  ##############################################################################
+
+  common:
+    platform: ${BUILD_PLATFORM:-linux/arm64/v8}
+    security_opt:
+      - no-new-privileges:true
+    privileged: true
+    cap_add:
+      - SYS_ADMIN
+      - SYS_NICE
+      - SYS_PTRACE
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "4m"
+        max-file: "1"
+    volumes:
+      - ./data/_ssl:/etc/ssl/web
+    environment:
+      - DEBUG_MODE=false
+      - TZ=Asia/Tokyo
+      - PGID=${GID:-12345}
+      - PUID=${UID:-12345}
+      - WEBUSER=shin
+      - WEBGROUP=shincompany
+      - WEBHOME=/opt/www
+      - S6_CMD_WAIT_FOR_SERVICES_MAXTIME=0
+
+  common-php:
+    extends: common
+    build:
+      args:
+        - IMAGE_SUFFIX=
+        - PHP_VERSION=${PHP_VERSION:-8.2}
+    environment:
+      - PHP_DEFAULT_CHARSET=UTF-8
+      - PHPFPM_SOCK_PATH=/var/run/php/run.sock
+
+################################################################################

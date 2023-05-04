@@ -1,0 +1,20 @@
+#!/command/with-contenv bash
+KIRBY_PROJECT="${KIRBY_PROJECT:-getkirby/starterkit}"
+KIRBY_ROOT="$(webhome)"
+KIRBY_CHECK="$KIRBY_ROOT/kirby"
+
+if [ ! -d "$KIRBY_CHECK" ]; then
+    wait-for-fpm &>/dev/null
+    echo; echo "🤖 Installing $KIRBY_PROJECT from scratch"
+    rm -rf $KIRBY_ROOT/web $KIRBY_ROOT/index.*
+
+    if [ "$(php -r 'echo PHP_VERSION_ID;')" -lt "70400" ]; then
+        composer-create  -d $KIRBY_ROOT/ $KIRBY_PROJECT $KIRBY_ROOT/ --no-install
+        composer config  -d $KIRBY_ROOT/ --no-plugins allow-plugins.getkirby/composer-installer true
+        composer-install -d $KIRBY_ROOT/
+    else
+        composer-create  -d $KIRBY_ROOT/ $KIRBY_PROJECT $KIRBY_ROOT/
+    fi
+
+    wmd $KIRBY_ROOT -R &
+fi

@@ -1,0 +1,39 @@
+version: "3.6"
+
+services:
+    nginx:
+        image: nginx:alpine
+        container_name: web-nginx
+        restart: unless-stopped
+        networks:
+            - default
+            - net-nginx-php
+        #depends_on:
+        links:
+            - php
+        volumes:
+            - "./etc/nginx/conf.d:/etc/nginx/conf.d"
+            - "./etc/nginx/logs/default:/etc/nginx/logs/default"
+            - "./etc/nginx/logs:/var/log/nginx/logs"
+            - "./var/www/html/docfile:/var/www/html" # 這個是伺服器服務的根，為了讓 nginx 看得到檔案
+        labels:
+            - "traefik.enable=true"
+            - "traefik.http.routers.${DOCFILE_TRAEFIK_ROUTERS_NAME}.entrypoints=${HTTP_ENTRY_POINTS}"
+            # - "traefik.http.routers.${DOCFILE_TRAEFIK_ROUTERS_NAME}.entrypoints=${HTTPS_ENTRY_POINTS}"
+            - "traefik.http.routers.${DOCFILE_TRAEFIK_ROUTERS_NAME}.rule=Host(`${DOCFILE_HOST_NAME}`)"
+    php:
+        image: php:7.4.27-fpm-alpine
+        container_name: web-php
+        networks:
+            - net-nginx-php
+        expose:
+            - "9000"
+        volumes:
+            - ./var/www/html/docfile:/var/www/html # 這個是伺服器服務的根，為了讓 php 看得到檔案
+
+networks:
+    default:
+        external: true
+        name: ${PROXY_NETWORK}
+    net-nginx-php:
+        name: net-nginx-php

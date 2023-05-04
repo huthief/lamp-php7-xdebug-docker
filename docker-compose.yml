@@ -1,69 +1,180 @@
-version: '3'
+# 20220210  php-apache改用php-apache-fpm >若事先已經編譯為cds/php image的話，則可直接引用
+# 20210716  將nginx-proxy 改爲  traefik
+# 202102-9  mariadb 由10.1更新為 10.4.17 , redis 更新為 6.0.10
+# 道親文書管理系統
+version: '3.8'
 services:
-    php-apache:
+    # 資料庫
+    cds-mariadb:
         container_name:
-            php7xdebug
-        build:
-            context: ./php-apache
-        ports:
-            #網站對應的網址。目前是直接對應實體機的80 port
-            #若要對應實體機的8080 port，要改為 - 8080:80
-            - 80:80
-            # - 6379:6379
-           #不用對應9000 port 
-           # - 9000:9000
-        volumes:
-            - ./var/www/html:/var/www/html
-            - ./etc/php/php.ini:/usr/local/etc/php/php.ini
-            #- ./etc/php/docker-php-ext-xdebug.ini:/usr/local/etc/php/conf.d/docker-php-ext-xdebug.ini
-        links:
-            - mariadb
-            - redis
-        #environment:
-            ##這邊，{{YOUR_IP_ADDRESS}}請改為此container的gateway ip
-            ##remote_host
-        #environment:
-        #  XDEBUG_CONFIG: "remote_host=${HOST_IP}"
-    mariadb:
-        container_name:
-            php7xdebug_mariadb
-        image: mariadb:10.1
+            cds-mariadb
+        image:
+            # mariadb:10.4.17
+            mariadb:10.11.2
         ports:
             - 3306:3306
+        #networks: 
+            #- bridge-network
+            #- reverse-proxy
+        #    - ${PROXY_NETWORK}
+        #cap_add:
+        #    - ALL
         volumes:
-            - ./var/lib/mysql:/var/lib/mysql
+            - ./etc/mysql/conf.d:/etc/mysql/conf.d
+            - ./var/lib/mysql:/var/lib/mysql:delegated
+            # - nfs-mysql:/var/lib/mysql
         environment:
             TZ: "Asia/Taipei"
-            MYSQL_ALLOW_EMPTY_PASSWORD: "no"
-            MYSQL_ROOT_PASSWORD: "SET_YOUR_MYSQL_ROOT_PASSWORD"
-            MYSQL_USER: 'SET_MYSQL_NEW_ACCOUNT_ID'
-            MYSQL_PASSWORD: 'SET_MYSQL_NEW_ACCOUNT_ACCOUNT_PASSWORD'
-            MYSQL_DATABASE: 'SET_MYSQL_NEW_DATABASE'
         #    MYSQL_ALLOW_EMPTY_PASSWORD: "no"
-        #    MYSQL_ROOT_PASSWORD: "!QAZ2wsx"
-        #    MYSQL_USER: 'phpmyadmin'
-        #    MYSQL_PASSWORD: '!QAZ2wsx'
-        #    MYSQL_DATABASE: 'phpmyadmin'
-    redis:
+        #    MYSQL_ROOT_PASSWORD: "SET_YOUR_MYSQL_ROOT_PASSWORD"
+        #    MYSQL_USER: 'SET_MYSQL_NEW_ACCOUNT_ID'
+        #    MYSQL_PASSWORD: 'SET_MYSQL_NEW_ACCOUNT_ACCOUNT_PASSWORD'
+        #    MYSQL_DATABASE: 'SET_MYSQL_NEW_DATABASE'
+            MYSQL_ALLOW_EMPTY_PASSWORD: "no"
+            MYSQL_ROOT_PASSWORD: "!QAZ2wsx"
+            MYSQL_USER: 'phpmyadmin'
+            MYSQL_PASSWORD: '!QAZ2wsx'
+            MYSQL_DATABASE: 'phpmyadmin'
+    cds-phpmyadmin:
         container_name:
-            php7xdebug_redis
-        # 這邊使用 amd64/redis 。若是一般環境請改用 redis
-        image: amd64/redis:6.0.9
-        ports:
-            - 6379:6379
+            cds-phpmyadmin
+        image: phpmyadmin/phpmyadmin
+        expose:
+            - 80
+            - 443
+        links:
+            - cds-mariadb
+        environment:
+            MYSQL_ROOT_PASSWORD: "!QAZ2wsx"
+            MYSQL_USER: 'phpmyadmin'
+            MYSQL_PASSWORD: '!QAZ2wsx'
+            MYSQL_DATABASE: 'phpmyadmin'
+            PMA_ARBITRARY: 1
         volumes:
-            - ./redis-data:/data
-    ##以下是另外加入phpmyadmin 的Docker，提供管理MySQL使用--------------------
-    ##設定port為8088，避免跟web  80 port衝突
-    #phpmyadmin:
-    #    container_name:
-    #        php7xdebug_phpmyadmin
-    #    image: 
-    #        phpmyadmin/phpmyadmin:latest
-    #    ports:
-    #        - 8088:80
-    #    restart: 
-    #        always
-    #    external_links:
-    #        - mariadb:db
-    ##END OF 另外加入phpmyadmin 的Docker，提供管理MySQL使用--------------------
+            - ./etc/php/php.ini:/usr/local/etc/php/php.ini
+        labels:
+            - "traefik.enable=true"
+            - "traefik.http.routers.${DB_TRAEFIK_ROUTERS_NAME}.entrypoints=${HTTP_ENTRY_POINTS}"
+            # - "traefik.http.routers.${DB_TRAEFIK_ROUTERS_NAME}.entrypoints=${HTTPS_ENTRY_POINTS}"
+            - "traefik.http.routers.${DB_TRAEFIK_ROUTERS_NAME}.rule=Host(`${DB_HOST_NAME}`)"
+            # - "traefik.http.routers.${DB_TRAEFIK_ROUTERS_NAME}.tls.certresolver=${CERTIFICATION_RESOLVERS}"    # 道親管理系統
+    cds-taomember:
+        container_name:
+            cds-taomember-dev
+        #build:
+        #    context: ./php-apache
+        image:
+            cds/php-apache
+        expose:
+            #網站對應的網址。目前是直接對應實體機的80 port
+            #若要對應實體機的8080 port，要改為 - 8080:80
+            - 80
+            - 443
+            - 9003
+        volumes:
+            - ./var/www/html/taomember:/var/www/html
+            # for php-apache
+            - ./etc/php/php.ini:/usr/local/etc/php/php.ini
+            # for php-apache-fpm
+        links:
+            - cds-mariadb
+            #- cds-mariadb
+        environment:
+            - DOMAIN=${CDS_HOST_NAME}
+            - DOCUMENT_ROOT=/
+        labels:
+            - "traefik.enable=true"
+            - "traefik.http.routers.${CDS_TRAEFIK_ROUTERS_NAME}.entrypoints=${HTTP_ENTRY_POINTS}"
+            # - "traefik.http.routers.${CDS_TRAEFIK_ROUTERS_NAME}.entrypoints=${HTTPS_ENTRY_POINTS}"
+            - "traefik.http.routers.${CDS_TRAEFIK_ROUTERS_NAME}.rule=Host(`${CDS_HOST_NAME}`)"
+            # - "traefik.http.routers.${CDS_TRAEFIK_ROUTERS_NAME}.tls.certresolver=${CERTIFICATION_RESOLVERS}"
+    # 文書系統
+    cds-docfile:
+        container_name:
+            cds-docfile-dev
+        #build:
+        #    context: ./php-apache
+        image:
+            # cds/php-8.1-apache
+            cds/php-fpm-apache-8.1
+        expose:
+            #網站對應的網址。目前是直接對應實體機的80 port
+            #若要對應實體機的8080 port，要改為 - 8080:80
+            - 80
+            - 443
+        volumes:
+            - ./var/www/html/docfile:/var/www/html
+            #- ./etc/php7/php-fpm.d/www.conf:/etc/php7/php-fpm.d/www.conf
+            - ./etc/ImageMagick-6/policy.xml:/etc/ImageMagick-6/policy.xml
+        environment:
+            - DOMAIN=${DOCFILE_HOST_NAME}
+            - DOCUMENT_ROOT=/
+        labels:
+            - "traefik.enable=true"
+            - "traefik.http.routers.${DOCFILE_TRAEFIK_ROUTERS_NAME}.entrypoints=${HTTP_ENTRY_POINTS}"
+            # - "traefik.http.routers.${DOCFILE_TRAEFIK_ROUTERS_NAME}.entrypoints=${HTTPS_ENTRY_POINTS}"
+            - "traefik.http.routers.${DOCFILE_TRAEFIK_ROUTERS_NAME}.rule=Host(`${DOCFILE_HOST_NAME}`)"
+            # - "traefik.http.routers.${DOCFILE_TRAEFIK_ROUTERS_NAME}.tls.certresolver=${CERTIFICATION_RESOLVERS}"
+    # 道務系統
+    cds-tao:
+        container_name:
+            cds-tao-dev
+        #build:
+        #    context: ./php-apache
+        image:
+            # cds/php-8.1-apache
+            cds/php-fpm-apache-8.1
+        expose:
+            #網站對應的網址。目前是直接對應實體機的80 port
+            #若要對應實體機的8080 port，要改為 - 8080:80
+            - 80
+            - 443
+        volumes:
+            - ./var/www/html/tao:/var/www/html
+            #- ./etc/php7/php-fpm.d/www.conf:/etc/php7/php-fpm.d/www.conf
+            - ./etc/ImageMagick-6/policy.xml:/etc/ImageMagick-6/policy.xml
+        environment:
+            - DOMAIN=${TAO_HOST_NAME}
+            - DOCUMENT_ROOT=/
+        labels:
+            - "traefik.enable=true"
+            - "traefik.http.routers.${TAO_TRAEFIK_ROUTERS_NAME}.entrypoints=${HTTP_ENTRY_POINTS}"
+            # - "traefik.http.routers.${TAO_TRAEFIK_ROUTERS_NAME}.entrypoints=${HTTPS_ENTRY_POINTS}"
+            - "traefik.http.routers.${TAO_TRAEFIK_ROUTERS_NAME}.rule=Host(`${TAO_HOST_NAME}`)"
+            # - "traefik.http.routers.${TAO_TRAEFIK_ROUTERS_NAME}.tls.certresolver=${CERTIFICATION_RESOLVERS}"
+    # API
+    cds-api:
+        container_name:
+            cds-api-dev
+        #build:
+        #    context: ./php-apache
+        image:
+            # cds/php-8.1-apache
+            cds/php-fpm-apache-8.1
+        expose:
+            #網站對應的網址。目前是直接對應實體機的80 port
+            #若要對應實體機的8080 port，要改為 - 8080:80
+            - 80
+            - 443
+        volumes:
+            - ./var/www/html/api:/var/www/html
+            # for php-apache
+            - ./etc/php/php.ini:/usr/local/etc/php/php.ini
+            # for php-apache-fpm
+            - ./etc/php/php.ini:/usr/local/etc/php-fpm/php.ini
+            - ./etc/ImageMagick-6/policy.xml:/etc/ImageMagick-6/policy.xml
+        links:
+            - cds-mariadb
+        environment:
+            - DOMAIN=${API_HOST_NAME}
+            - DOCUMENT_ROOT=/
+        labels:
+            - "traefik.enable=true"
+            - "traefik.http.routers.${API_TRAEFIK_ROUTERS_NAME}.entrypoints=${HTTP_ENTRY_POINTS}"
+            # - "traefik.http.routers.${API_TRAEFIK_ROUTERS_NAME}.entrypoints=${HTTPS_ENTRY_POINTS}"
+            - "traefik.http.routers.${API_TRAEFIK_ROUTERS_NAME}.rule=Host(`${API_HOST_NAME}`)"
+            # - "traefik.http.routers.${API_TRAEFIK_ROUTERS_NAME}.tls.certresolver=${CERTIFICATION_RESOLVERS}"
+networks:
+    default:
+        external: true
+        name: ${PROXY_NETWORK}

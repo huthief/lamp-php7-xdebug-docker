@@ -4,3 +4,14 @@ innodb-file-format = BARRACUDA
 innodb-large-prefix = ON
 innodb_file_per_table = 1
 innodb_max_dirty_pages_pct = 0
+innodb_lru_scan_depth = 256
+
+# add by Slim sample
+innodb_buffer_pool_size = 1024M
+
+# Unicode
+character-set-server = utf8mb4
+collation-server = utf8mb4_unicode_ci
+
+[mysql]
+default-character-set = utf8mb4

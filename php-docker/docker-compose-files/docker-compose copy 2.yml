@@ -1,0 +1,45 @@
+# 20210716 將nginx-proxy 改爲  traefik
+# 202102-9 mariadb 由10.1更新為 10.4.17 , redis 更新為 6.0.10
+# 道親文書管理系統
+version: '3.8'
+services:
+    web-nginx:
+        image: nginx:alpine
+        container_name: web-nginx
+        networks:
+            - default # 跟 traefik 同一個，traefik 會幫你做事
+            - nginx-php # 下面解釋
+        #depends_on:
+        #    - php-fpm
+        links:
+            - php-fpm
+        volumes:
+            - "./etc/nginx/conf.d:/etc/nginx/conf.d" # 這邊讓設定檔可以被放進去
+            - "./etc/nginx/logs/${DOCFILE_HOST_NAME}:/etc/nginx/logs/${DOCFILE_HOST_NAME}" # 這邊是 domain 的 logs
+            - "./etc/nginx/logs:/var/log/nginx/logs" # 這個是 nginx 本身的 logs
+            - "./var/www/html/docfile:/var/www/html" # 這個是伺服器服務的根，為了讓 nginx 看得到檔案
+        labels:
+            # - "traefik.docker.network=${PROXY_NETWORK}"
+            - "traefik.enable=true"
+            - "traefik.http.routers.${DOCFILE_TRAEFIK_ROUTERS_NAME}.entrypoints=${HTTP_ENTRY_POINTS}"
+            # - "traefik.http.routers.${DOCFILE_TRAEFIK_ROUTERS_NAME}.entrypoints=${HTTPS_ENTRY_POINTS}"
+            - "traefik.http.routers.${DOCFILE_TRAEFIK_ROUTERS_NAME}.rule=Host(`${DOCFILE_HOST_NAME}`)"
+        restart: 
+            unless-stopped
+        
+    php-fpm:
+        image: php:7.4.27-fpm-alpine
+        container_name: php-fpm
+        networks:
+            - nginx-php # 下面解釋
+        expose:
+            - "9000" # nginx 會用 :9000 呼叫 php 的 fastcgi
+            # 可參考 https://github.com/docker-library/php/blob/master/7.3/alpine3.9/fpm/Dockerfile#L226
+        volumes:
+            - ./var/www/html/docfile:/var/www/html # 這個是伺服器服務的根，為了讓 php 看得到檔案
+networks:
+    default:
+        external: true
+        name: reverse-proxy
+    nginx-php: # 這個網路只存在在 docker 內部，用來溝通 nginx 和 php
+        name: nginx-php

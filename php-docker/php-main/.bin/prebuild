@@ -1,0 +1,153 @@
+#!/bin/bash
+# This file belongs to the project https://code.shin.company/php
+# Author:  Shin <shin@shin.company>
+# License: https://code.shin.company/php/blob/main/LICENSE
+################################################################################
+
+[ -z "$1" ] && echo "Missing build target." && exit 1;
+
+TARGET=$1
+BASE_DIR="$(git rev-parse --show-toplevel)"
+SRC_DIR="$BASE_DIR/src"
+CACHE_DIR="/tmp/build-cache"
+LATEST_S6="$(cat ${BASE_DIR}/S6_VERSIONS     | sort -r | head -n1)"
+OS_VERSIONS="$(cat ${BASE_DIR}/OS_VERSIONS   | sort -r )"
+PHP_VERSIONS="$(cat ${BASE_DIR}/PHP_VERSIONS | sort -r )"
+LATEST_OS="$(echo "$OS_VERSIONS"   | head -n1)"
+LATEST_PHP="$(echo "$PHP_VERSIONS" | head -n1)"
+
+BUILD_DATE="$(date +%Y-%m-%dT%T%z)"
+BUILD_REVISION="$(git rev-parse HEAD)"
+BUILD_SCRIPT="$BASE_DIR/.github/workflows/build-v2.yml"
+
+################################################################################
+# Helper methods
+################################################################################
+
+tee_or_print () {
+    local file="$1" ; shift
+    if [ -f $file ]; then cat $file; else "$@" | tee $file; fi
+}
+
+basehash () { shasum -a1 "$@" 2>/dev/null | cut -c1-40; }
+
+dirhash () {
+    find ${1:-$BASE_DIR} -type f \
+        | grep -v 'README\.md\|\.dockerignore\|.checksum' \
+        | sort -u \
+        | xargs -I {} shasum -a1 {} \
+        | basehash
+}
+
+imagehash () {
+    for image in "$@"; do
+        echo "$(docker manifest inspect --insecure "$@" 2>/dev/null | basehash) - $image"
+    done
+}
+
+linkhash () {
+    for url in "$@"; do
+        echo "$(curl -skL "$url" 2>/dev/null | basehash) - $url"
+    done
+}
+
+treehash() {
+    local target
+    local checksum
+    for path in "$@"; do
+        target="$BASE_DIR/$path"
+        if [ -d $target ]; then
+            checksum="$target/.checksum"
+            if [ -f $checksum ]; then cat $checksum; continue; fi
+            touch $checksum ; case "$path" in
+                src/base-s6     ) treehash S6_VERSIONS src/base | tee -a $checksum ;;
+                src/base-ubuntu ) treehash src/base-s6          | tee -a $checksum ;;
+                src/php/cli     ) treehash src/base-ubuntu      | tee -a $checksum ;;
+                src/php/fpm     ) treehash src/php/cli          | tee -a $checksum ;;
+                src/servers/*   ) treehash src/php/fpm          | tee -a $checksum ;;
+                src/webapps/*   ) treehash src/servers/fpm-$(grep nginx $target/Dockerfile >/dev/null && echo 'nginx' || echo 'apache') | tee -a $checksum ;;
+            esac;
+            echo "$(dirhash ${target/$BASE_DIR/.}) - $path/" | tee -a $checksum
+        else
+            echo "$(basehash ${target/$BASE_DIR/.}) - $path"
+        fi
+    done
+}
+
+prebuild () {
+    local checksum
+    local desc
+    local context
+
+    context="$BASE_DIR/$1" ; [ -d $context ] || return 1
+    mkdir -p ${context}/root
+
+    if [ -f ${context}/README.md ] && [ -z "$(cat ${context}/README.md | grep SPONSOR\.md)" ]; then
+        echo -e "\n\n$(cat ${BASE_DIR}/SPONSOR.md)" >>${context}/README.md
+        desc="$(sed '3q;d' ${context}/README.md)"
+    fi
+
+    if [ -f ${context}/Dockerfile ]; then
+        cp -rpf $SRC_DIR/.dockerignore ${context}/.dockerignore
+        if [ "$2" != "nometa" ] && [ -z "$(cat ${context}/Dockerfile | grep Metafile)" ]; then
+            echo -e "\n\n$(cat $SRC_DIR/Metafile)" >>${context}/Dockerfile
+        fi
+    fi
+
+    $BASE_DIR/.bin/fix-attr $context
+    basehash $BUILD_SCRIPT | tee -a $context/.checksum
+    checksum="$(basehash $context/.checksum)"
+    echo "  ${desc:-No description}"
+    echo "  #️⃣ Checksum: $checksum"
+
+    echo -e "\n🖨 Making output for the next steps"
+    echo "BUILD_CACHE_DIR=$CACHE_DIR" >> $GITHUB_ENV
+    echo "BUILD_CACHE=shinsenter/php:build-cache" >> $GITHUB_ENV
+    echo "BUILD_DATE=$BUILD_DATE" >> $GITHUB_ENV
+    echo "BUILD_DESC=$desc" >> $GITHUB_ENV
+    echo "BUILD_PLATFORM=linux/amd64,linux/arm/v7,linux/arm64/v8,linux/ppc64le" >> $GITHUB_ENV
+    echo "BUILD_REVISION=$BUILD_REVISION" >> $GITHUB_ENV
+    echo "CHECKSUM=$checksum" >> $GITHUB_ENV
+    echo "LATEST_OS=$LATEST_OS" >> $GITHUB_ENV
+    echo "LATEST_PHP=$LATEST_PHP" >> $GITHUB_ENV
+    echo "LATEST_S6=$LATEST_S6" >> $GITHUB_ENV
+    # echo "OS_VERSIONS=$OS_VERSIONS" >> $GITHUB_ENV
+    # echo "PHP_VERSIONS=$PHP_VERSIONS" >> $GITHUB_ENV
+}
+
+################################################################################
+# Prebuild steps
+################################################################################
+
+echo -e "\n🤖 Cheking dependencies for $TARGET"
+
+# refresh the scratch images every month
+mkdir -p $SRC_DIR/base/scratch
+tee_or_print $SRC_DIR/base/.source date '+%Y%m'
+
+# refresh the base images when the ubuntu repo updated
+tee_or_print $SRC_DIR/base-s6/.source imagehash ubuntu
+
+# refresh the php images when the source updated
+tee_or_print $SRC_DIR/php/cli/.source \
+    linkhash \
+        'http://ppa.launchpad.net/ondrej/php/ubuntu/dists/?C=M;O=D' \
+        'https://getcomposer.org/download/latest-stable/composer.phar.sha256sum'
+
+# refresh the php-apache images when the source updated
+tee_or_print $SRC_DIR/servers/fpm-apache/.source \
+    linkhash 'http://ppa.launchpadcontent.net/ondrej/apache2/ubuntu/dists/?C=M;O=D'
+
+# refresh the php-nginx images when the source updated
+tee_or_print $SRC_DIR/servers/fpm-nginx/.source \
+    linkhash 'http://ppa.launchpadcontent.net/ondrej/nginx-mainline/ubuntu/dists/?C=M;O=D'
+
+# refresh the wordpress images when the WP-CLI updated
+tee_or_print $SRC_DIR/webapps/wordpress/.source \
+    linkhash 'https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar.sha512'
+
+echo -e "\n🤖 Preparing $TARGET"
+treehash $TARGET
+prebuild $TARGET $2
+echo -e "\nCompleted."
+mkdir -p $CACHE_DIR

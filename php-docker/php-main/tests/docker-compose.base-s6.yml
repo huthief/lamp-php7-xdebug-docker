@@ -1,0 +1,21 @@
+# This file belongs to the project https://code.shin.company/php
+# Author:  Shin <shin@shin.company>
+# License: https://code.shin.company/php/blob/main/LICENSE
+################################################################################
+
+version: '3'
+services:
+
+  ##############################################################################
+
+  s6-overlay:
+    image: shinsenter/s6-overlay:${S6_VERSION:-latest}
+    extends:
+      file: common.yml
+      service: common
+    build:
+      context: ../src/base-s6
+      args:
+        S6_VERSION: ${S6_VERSION}
+
+################################################################################

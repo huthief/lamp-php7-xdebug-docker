@@ -1,0 +1,118 @@
+# 20211015  將cds docfile、api、taomember 改為使用產製出來的docker image
+# 20211014  將cds-docfile改為使用cds-frontend產製出來的docker image cds/docfile
+# 20210716  將nginx-proxy 改爲  traefik
+# 202102-9  mariadb 由10.1更新為 10.4.17 , redis 更新為 6.0.10
+# 道親文書管理系統
+version: '3.8'
+services:
+    # 道親管理系統
+    cds-taomember:
+        container_name:
+            cds-taomember
+        image:
+            cds/taomember
+        expose:
+            #網站對應的網址。目前是直接對應實體機的80 port
+            #若要對應實體機的8080 port，要改為 - 8080:80
+            - 80
+            - 443
+        links:
+            - mariadb
+            - redis
+        networks: 
+            - reverse-proxy
+        #environment:
+        #  VIRTUAL_HOST: cdsdev.fycd.info
+        labels:
+            - "traefik.enable=true"
+            - "traefik.port=80"
+            - "traefik.http.routers.cdsdev.rule=Host(`cdsdev.fycd.info`)"
+    # 文書系統
+    cds-docfile:
+        container_name:
+            cds-docfile
+        image:
+            cds/docfile
+        expose:
+            #網站對應的網址。目前是直接對應實體機的80 port
+            #若要對應實體機的8080 port，要改為 - 8080:80
+            - 80
+            - 443
+        networks: 
+            #- bridge-network
+            - reverse-proxy
+        #environment:
+            ##這邊，{{YOUR_IP_ADDRESS}}請改為此container的gateway ip
+            ##remote_host
+        #environment:
+        #  VIRTUAL_HOST: docfiledev.fycd.info
+        labels:
+            - "traefik.enable=true"
+            - "traefik.port=80"
+            - "traefik.http.routers.docfiledev.rule=Host(`docfiledev.fycd.info`)"
+    # API
+    cds-api:
+        container_name:
+            cds-api
+        image:
+            cds/api
+        expose:
+            #網站對應的網址。目前是直接對應實體機的80 port
+            #若要對應實體機的8080 port，要改為 - 8080:80
+            - 80
+            - 443
+        links:
+            - mariadb
+            - redis
+        networks: 
+            #- bridge-network
+            - reverse-proxy
+        #environment:
+        #  VIRTUAL_HOST: apidev.fycd.info
+        labels:
+            - "traefik.enable=true"
+            - "traefik.port=80"
+            - "traefik.http.routers.cdsapidev.rule=Host(`apidev.fycd.info`)"
+    # 資料庫
+    mariadb:
+        container_name:
+            cds_mariadb
+        image: mariadb:10.4.17
+        ports:
+            - 3306:3306
+        networks: 
+            #- bridge-network
+            - reverse-proxy
+        #cap_add:
+        #    - ALL
+        volumes:
+            - ./etc/mysql/conf.d:/etc/mysql/conf.d
+            - ./var/lib/mysql:/var/lib/mysql:delegated
+            # - nfs-mysql:/var/lib/mysql
+        environment:
+            TZ: "Asia/Taipei"
+        #    MYSQL_ALLOW_EMPTY_PASSWORD: "no"
+        #    MYSQL_ROOT_PASSWORD: "SET_YOUR_MYSQL_ROOT_PASSWORD"
+        #    MYSQL_USER: 'SET_MYSQL_NEW_ACCOUNT_ID'
+        #    MYSQL_PASSWORD: 'SET_MYSQL_NEW_ACCOUNT_ACCOUNT_PASSWORD'
+        #    MYSQL_DATABASE: 'SET_MYSQL_NEW_DATABASE'
+            MYSQL_ALLOW_EMPTY_PASSWORD: "no"
+            MYSQL_ROOT_PASSWORD: "!QAZ2wsx"
+            MYSQL_USER: 'phpmyadmin'
+            MYSQL_PASSWORD: '!QAZ2wsx'
+            MYSQL_DATABASE: 'phpmyadmin'
+    redis:
+        container_name:
+            cds_redis
+        # 這邊使用 amd64/redis 。若是一般環境請改用 redis
+        image: amd64/redis:6.2.6
+        ports:
+            - 6379:6379
+        networks: 
+            #- bridge-network
+            - reverse-proxy
+        volumes:
+            - ./redis-data:/data
+networks:
+    reverse-proxy:
+        external: true

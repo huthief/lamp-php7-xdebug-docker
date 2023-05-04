@@ -1,0 +1,94 @@
+# 20220210  php-apache改用php-apache-fpm >若事先已經編譯為cds/php image的話，則可直接引用
+# 20210716  將nginx-proxy 改爲  traefik
+# 202102-9  mariadb 由10.1更新為 10.4.17 , redis 更新為 6.0.10
+# 道親文書管理系統
+version: '3.8'
+services:
+    # 道親管理系統
+    cds-taomember:
+        container_name:
+            cds-taomember-dev
+        #build:
+        #    context: ./php-apache-fpm
+        image:
+            cds/php-apache
+        expose:
+            #網站對應的網址。目前是直接對應實體機的80 port
+            #若要對應實體機的8080 port，要改為 - 8080:80
+            - 80
+            - 443
+        volumes:
+            - ./var/www/html/taomember:/var/www/html
+            # for php-apache
+            # - ./etc/php/php.ini:/usr/local/etc/php/php.ini
+            # for php-apache-fpm
+            # - ./etc/php7/php.ini:/usr/local/etc/php/php.ini
+        links:
+            - mariadb
+        environment:
+            - DOMAIN=${CDS_HOST_NAME}
+            - DOCUMENT_ROOT=/
+        labels:
+            - "traefik.enable=true"
+            - "traefik.http.routers.${CDS_TRAEFIK_ROUTERS_NAME}.entrypoints=${HTTP_ENTRY_POINTS}"
+            # - "traefik.http.routers.${CDS_TRAEFIK_ROUTERS_NAME}.entrypoints=${HTTPS_ENTRY_POINTS}"
+            - "traefik.http.routers.${CDS_TRAEFIK_ROUTERS_NAME}.rule=Host(`${CDS_HOST_NAME}`)"
+            # - "traefik.http.routers.${CDS_TRAEFIK_ROUTERS_NAME}.tls.certresolver=${CERTIFICATION_RESOLVERS}"
+    # 文書系統
+    cds-docfile:
+        container_name:
+            cds-docfile-dev
+        #build:
+        #    context: ./php-apache-fpm
+        image:
+            cds/php-apache
+        expose:
+            #網站對應的網址。目前是直接對應實體機的80 port
+            #若要對應實體機的8080 port，要改為 - 8080:80
+            - 80
+            - 443
+        volumes:
+            - ./var/www/html/docfile:/var/www/html
+        environment:
+            - DOMAIN=${DOCFILE_HOST_NAME}
+            - DOCUMENT_ROOT=/
+        labels:
+            - "traefik.enable=true"
+            - "traefik.http.routers.${DOCFILE_TRAEFIK_ROUTERS_NAME}.entrypoints=${HTTP_ENTRY_POINTS}"
+            # - "traefik.http.routers.${DOCFILE_TRAEFIK_ROUTERS_NAME}.entrypoints=${HTTPS_ENTRY_POINTS}"
+            - "traefik.http.routers.${DOCFILE_TRAEFIK_ROUTERS_NAME}.rule=Host(`${DOCFILE_HOST_NAME}`)"
+            # - "traefik.http.routers.${DOCFILE_TRAEFIK_ROUTERS_NAME}.tls.certresolver=${CERTIFICATION_RESOLVERS}"
+    # API
+    cds-api:
+        container_name:
+            cds-api-dev
+        #build:
+        #    context: ./php-apache-fpm
+        image:
+            cds/php-apache
+        expose:
+            #網站對應的網址。目前是直接對應實體機的80 port
+            #若要對應實體機的8080 port，要改為 - 8080:80
+            - 80
+            - 443
+        volumes:
+            - ./var/www/html/api:/var/www/html
+            # for php-apache
+            # - ./etc/php/php.ini:/usr/local/etc/php/php.ini
+            # for php-apache-fpm
+            # - ./etc/php7/php.ini:/usr/local/etc/php/php.ini
+        links:
+            - mariadb
+        environment:
+            - DOMAIN=${API_HOST_NAME}
+            - DOCUMENT_ROOT=/
+        labels:
+            - "traefik.enable=true"
+            - "traefik.http.routers.${API_TRAEFIK_ROUTERS_NAME}.entrypoints=${HTTP_ENTRY_POINTS}"
+            # - "traefik.http.routers.${API_TRAEFIK_ROUTERS_NAME}.entrypoints=${HTTPS_ENTRY_POINTS}"
+            - "traefik.http.routers.${API_TRAEFIK_ROUTERS_NAME}.rule=Host(`${API_HOST_NAME}`)"
+            # - "traefik.http.routers.${API_TRAEFIK_ROUTERS_NAME}.tls.certresolver=${CERTIFICATION_RESOLVERS}"
+networks:
+    default:
+        external: true
+        name: ${PROXY_NETWORK}

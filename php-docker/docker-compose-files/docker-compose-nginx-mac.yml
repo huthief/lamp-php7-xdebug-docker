@@ -1,0 +1,144 @@
+# 202102-9 mariadb 由10.1更新為 10.4.17 , redis 更新為 6.0.10
+# 道親文書管理系統
+version: '3.8'
+services:
+    nginx-proxy:
+        container_name:
+            nginx-proxy
+        image: 
+            jwilder/nginx-proxy
+        networks: 
+            - bridge-network
+        ports:
+            - 80:80
+            - 443:443
+        volumes:
+            - ./etc/nginx/certs:/etc/nginx/certs:ro
+            - ./etc/nginx/vhost.d:/etc/nginx/vhost.d
+            - ./etc/nginx/html:/usr/share/nginx/html
+            - ./etc/nginx/conf.d:/etc/nginx/conf.d
+            - /var/run/docker.sock:/tmp/docker.sock:ro
+        restart: 
+            always
+    # 道親管理系統
+    cds-taomember:
+        container_name:
+            cds-taomember
+        build:
+            context: ./php-apache
+        expose:
+            #網站對應的網址。目前是直接對應實體機的80 port
+            #若要對應實體機的8080 port，要改為 - 8080:80
+            - 80
+            - 443
+        volumes:
+            #- ./var/www/html/taomember:/var/www/html
+            - nfs-html-taomember:/var/www/html
+            - ./etc/php/php.ini:/usr/local/etc/php/php.ini
+            #- ./etc/php/docker-php-ext-xdebug.ini:/usr/local/etc/php/conf.d/docker-php-ext-xdebug.ini
+        links:
+            - mariadb
+            - redis
+        networks: 
+            - bridge-network
+        environment:
+          VIRTUAL_HOST: cdsdev.fycd.info
+    # 文書系統
+    cds-docfile:
+        container_name:
+            cds-docfile
+        build:
+            context: ./php-apache
+        expose:
+            #網站對應的網址。目前是直接對應實體機的80 port
+            #若要對應實體機的8080 port，要改為 - 8080:80
+            - 80
+            - 443
+        volumes:
+            - ./var/www/html/docfile:/var/www/html
+            - ./etc/php/php.ini:/usr/local/etc/php/php.ini
+            #- ./etc/php/docker-php-ext-xdebug.ini:/usr/local/etc/php/conf.d/docker-php-ext-xdebug.ini
+        networks: 
+            - bridge-network
+        #environment:
+            ##這邊，{{YOUR_IP_ADDRESS}}請改為此container的gateway ip
+            ##remote_host
+        environment:
+          VIRTUAL_HOST: docfiledev.fycd.info
+    # API
+    cds-api:
+        container_name:
+            cds-api
+        build:
+            context: ./php-apache
+        expose:
+            #網站對應的網址。目前是直接對應實體機的80 port
+            #若要對應實體機的8080 port，要改為 - 8080:80
+            - 80
+            - 443
+        volumes:
+            #- ./var/www/html/api:/var/www/html
+            - nfs-html-api:/var/www/html
+            - ./etc/php/php.ini:/usr/local/etc/php/php.ini
+            #- ./etc/php/docker-php-ext-xdebug.ini:/usr/local/etc/php/conf.d/docker-php-ext-xdebug.ini
+        links:
+            - mariadb
+            - redis
+        networks: 
+            - bridge-network
+        environment:
+          VIRTUAL_HOST: apidev.fycd.info
+    # 資料庫
+    mariadb:
+        container_name:
+            cds_mariadb
+        image: mariadb:10.4.17
+        ports:
+            - 3306:3306
+        networks: 
+            - bridge-network
+        #cap_add:
+        #    - ALL
+        volumes:
+            - ./etc/mysql/conf.d:/etc/mysql/conf.d
+            - ./var/lib/mysql:/var/lib/mysql:delegated
+            #- nfs-mysql:/var/lib/mysql
+        environment:
+            TZ: "Asia/Taipei"
+        #    MYSQL_ALLOW_EMPTY_PASSWORD: "no"
+        #    MYSQL_ROOT_PASSWORD: "SET_YOUR_MYSQL_ROOT_PASSWORD"
+        #    MYSQL_USER: 'SET_MYSQL_NEW_ACCOUNT_ID'
+        #    MYSQL_PASSWORD: 'SET_MYSQL_NEW_ACCOUNT_ACCOUNT_PASSWORD'
+        #    MYSQL_DATABASE: 'SET_MYSQL_NEW_DATABASE'
+            MYSQL_ALLOW_EMPTY_PASSWORD: "no"
+            MYSQL_ROOT_PASSWORD: "!QAZ2wsx"
+            MYSQL_USER: 'phpmyadmin'
+            MYSQL_PASSWORD: '!QAZ2wsx'
+            MYSQL_DATABASE: 'phpmyadmin'
+    redis:
+        container_name:
+            cds_redis
+        # 這邊使用 amd64/redis 。若是一般環境請改用 redis
+        image: amd64/redis:6.0.10
+        ports:
+            - 6379:6379
+        networks: 
+            - bridge-network
+        volumes:
+            - ./redis-data:/data
+networks:
+    bridge-network:
+        driver: bridge
+volumes:
+    nfs-html-api:
+        driver: local
+        driver_opts:
+            type: nfs
+            o: addr=host.docker.internal,rw,nolock,hard,nointr,nfsvers=3
+            device: ":/Users/lukehu/MyDeveloper/Docker/cds-docker/var/www/html/api"
+    nfs-html-taomember:
+        driver: local
+        driver_opts:
+            type: nfs
+            o: addr=host.docker.internal,rw,nolock,hard,nointr,nfsvers=3
+            device: ":/Users/lukehu/MyDeveloper/Docker/cds-docker/var/www/html/taomember"

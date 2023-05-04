@@ -1,0 +1,139 @@
+# 20220213  原php+apache 改用nginx + php-fpm增加效能
+# 20210716  將nginx-proxy 改爲  traefik
+# 202102-9  mariadb 由10.1更新為 10.4.17 , redis 更新為 6.0.10
+# 道親文書管理系統
+version: '3.8'
+services:
+######################################################################
+# 文書系統前端docfile
+######################################################################
+    api-nginx:
+        image: nginx:alpine
+        container_name: api-nginx
+        networks:
+            - default # 跟 traefik 同一個，traefik 會幫你做事
+            - api-nginx-php # 下面解釋
+        #depends_on:
+        #    - php-fpm
+        links:
+            - api-php-fpm
+        volumes:
+            - "./etc/nginx/${API_HOST_NAME}/conf.d:/etc/nginx/conf.d" # 這邊讓設定檔可以被放進去
+            #- "./etc/nginx/docfile/logs/${DOCFILE_HOST_NAME}:/etc/nginx/logs/${DOCFILE_HOST_NAME}" # 這邊是 domain 的 logs
+            - "./etc/nginx/${API_HOST_NAME}/logs/default:/etc/nginx/logs/default" # 這邊是 domain 的 logs
+            - "./etc/nginx/${API_HOST_NAME}/logs:/var/log/nginx/logs" # 這個是 nginx 本身的 logs
+            - "./var/www/html/api:/var/www/html" # 這個是伺服器服務的根，為了讓 nginx 看得到檔案
+        labels:
+            # - "traefik.docker.network=${PROXY_NETWORK}"
+            - "traefik.enable=true"
+            - "traefik.http.routers.${API_TRAEFIK_ROUTERS_NAME}.entrypoints=${HTTP_ENTRY_POINTS}"
+            # - "traefik.http.routers.${DOCFILE_TRAEFIK_ROUTERS_NAME}.entrypoints=${HTTPS_ENTRY_POINTS}"
+            - "traefik.http.routers.${API_TRAEFIK_ROUTERS_NAME}.rule=Host(`${API_HOST_NAME}`)"
+        restart: 
+            unless-stopped
+        
+    api-php-fpm:
+        #image: php:7.4.27-fpm-alpine
+        image: cds/php-fpm-alpine
+        container_name: api-php-fpm
+        networks:
+            - api-nginx-php # 下面解釋
+        environment:
+            - "ENV_SUBSTITUTION_ENABLE=true"
+        expose:
+            - "9000" # nginx 會用 :9000 呼叫 php 的 fastcgi
+            # 可參考 https://github.com/docker-library/php/blob/master/7.3/alpine3.9/fpm/Dockerfile#L226
+        volumes:
+            - ./var/www/html/api:/var/www/html # 這個是伺服器服務的根，為了讓 php 看得到檔案
+######################################################################
+# 文書系統後端api
+######################################################################
+    docfile-nginx:
+        image: nginx:alpine
+        container_name: docfile-nginx
+        networks:
+            - default # 跟 traefik 同一個，traefik 會幫你做事
+            - docfile-nginx-php # 下面解釋
+        #depends_on:
+        #    - php-fpm
+        links:
+            - docfile-php-fpm
+        volumes:
+            - "./etc/nginx/${DOCFILE_HOST_NAME}/conf.d:/etc/nginx/conf.d" # 這邊讓設定檔可以被放進去
+            #- "./etc/nginx/docfile/logs/${DOCFILE_HOST_NAME}:/etc/nginx/logs/${DOCFILE_HOST_NAME}" # 這邊是 domain 的 logs
+            - "./etc/nginx/${DOCFILE_HOST_NAME}/logs/default:/etc/nginx/logs/default" # 這邊是 domain 的 logs
+            - "./etc/nginx/${DOCFILE_HOST_NAME}/logs:/var/log/nginx/logs" # 這個是 nginx 本身的 logs
+            - "./var/www/html/api:/var/www/html" # 這個是伺服器服務的根，為了讓 nginx 看得到檔案
+        labels:
+            # - "traefik.docker.network=${PROXY_NETWORK}"
+            - "traefik.enable=true"
+            - "traefik.http.routers.${DOCFILE_TRAEFIK_ROUTERS_NAME}.entrypoints=${HTTP_ENTRY_POINTS}"
+            # - "traefik.http.routers.${DOCFILE_TRAEFIK_ROUTERS_NAME}.entrypoints=${HTTPS_ENTRY_POINTS}"
+            - "traefik.http.routers.${DOCFILE_TRAEFIK_ROUTERS_NAME}.rule=Host(`${DOCFILE_HOST_NAME}`)"
+        restart: 
+            unless-stopped
+        
+    docfile-php-fpm:
+        #image: php:7.4.27-fpm-alpine
+        image: cds/php-fpm-alpine
+        container_name: docfile-php-fpm
+        networks:
+            - docfile-nginx-php # 下面解釋
+        environment:
+            - "ENV_SUBSTITUTION_ENABLE=true"
+        expose:
+            - "9000" # nginx 會用 :9000 呼叫 php 的 fastcgi
+            # 可參考 https://github.com/docker-library/php/blob/master/7.3/alpine3.9/fpm/Dockerfile#L226
+        volumes:
+            - ./var/www/html/docfile:/var/www/html # 這個是伺服器服務的根，為了讓 php 看得到檔案
+######################################################################
+# 道親系統taomember
+######################################################################
+    taomember-nginx:
+        image: nginx:alpine
+        container_name: taomember-nginx
+        networks:
+            - default # 跟 traefik 同一個，traefik 會幫你做事
+            - taomember-nginx-php # 下面解釋
+        #depends_on:
+        #    - php-fpm
+        links:
+            - taomember-php-fpm
+        volumes:
+            - "./etc/nginx/${CDS_HOST_NAME}/conf.d:/etc/nginx/conf.d" # 這邊讓設定檔可以被放進去
+            #- "./etc/nginx/docfile/logs/${DOCFILE_HOST_NAME}:/etc/nginx/logs/${DOCFILE_HOST_NAME}" # 這邊是 domain 的 logs
+            - "./etc/nginx/${CDS_HOST_NAME}/logs/default:/etc/nginx/logs/default" # 這邊是 domain 的 logs
+            - "./etc/nginx/${CDS_HOST_NAME}/logs:/var/log/nginx/logs" # 這個是 nginx 本身的 logs
+            - "./var/www/html/taomember:/var/www/html" # 這個是伺服器服務的根，為了讓 nginx 看得到檔案
+        labels:
+            # - "traefik.docker.network=${PROXY_NETWORK}"
+            - "traefik.enable=true"
+            - "traefik.http.routers.${CDS_TRAEFIK_ROUTERS_NAME}.entrypoints=${HTTP_ENTRY_POINTS}"
+            # - "traefik.http.routers.${DOCFILE_TRAEFIK_ROUTERS_NAME}.entrypoints=${HTTPS_ENTRY_POINTS}"
+            - "traefik.http.routers.${CDS_TRAEFIK_ROUTERS_NAME}.rule=Host(`${CDS_HOST_NAME}`)"
+        restart: 
+            unless-stopped
+        
+    taomember-php-fpm:
+        #image: php:7.4.27-fpm-alpine
+        image: cds/php-fpm-alpine
+        container_name: taomember-php-fpm
+        networks:
+            - taomember-nginx-php # 下面解釋
+        environment:
+            - "ENV_SUBSTITUTION_ENABLE=true"
+        expose:
+            - "9000" # nginx 會用 :9000 呼叫 php 的 fastcgi
+            # 可參考 https://github.com/docker-library/php/blob/master/7.3/alpine3.9/fpm/Dockerfile#L226
+        volumes:
+            - ./var/www/html/taomember:/var/www/html # 這個是伺服器服務的根，為了讓 php 看得到檔案
+networks:
+    default:
+        external: true
+        name: reverse-proxy
+    api-nginx-php: # 這個網路只存在在 docker 內部，用來溝通 nginx 和 php
+        name: api-nginx-php
+    docfile-nginx-php: # 這個網路只存在在 docker 內部，用來溝通 nginx 和 php
+        name: docfile-nginx-php
+    taomember-nginx-php: # 這個網路只存在在 docker 內部，用來溝通 nginx 和 php
+        name: taomember-nginx-php

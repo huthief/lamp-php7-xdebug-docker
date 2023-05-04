@@ -1,0 +1,48 @@
+#!/command/with-contenv bash
+WLC=/welcome.txt
+LCS=/license.txt
+EMAIL="${MAINTAINER:-shin@shin.company}"
+NAME="${IMAGE_NAME:-shinsenter/s6-ubuntu}"
+WEBUSER="${WEBUSER:-www-data}"
+WEBGROUP="${WEBGROUP:-www-data}"
+WEBHOME="$(webhome)"
+GREETING="
+
+$([ -f $WLC ] && cat $WLC | sed -u "s#%PATH%#$WLC#g")
+
+----------------------------------------
+  Container : $NAME
+  Distro    : $(bash -c '. /etc/os-release;echo ${PRETTY_NAME:-Unknown}')
+  Timezone  : $(date +'%Z') (GMT$(date +'%z'))
+  UID / GID : $WEBUSER:$WEBGROUP ($(id -u $WEBUSER):$(id -g $WEBUSER))
+  Web Root  : $WEBHOME
+----------------------------------------
+
+$([ -f $LCS ] && cat $LCS | sed -u "s#%EMAIL%#$EMAIL#g")
+
+"
+
+if [ ! -z "$WEBHOME" ]; then
+    if [ "$FIX_WEBHOME_PERMISSION" == "true" ] || [ -e /tmp/owner-changed ]; then
+        rm -rf /tmp/owner-changed
+        echo "🗂 Fixing permission for ${WEBHOME}"
+        wmd /root    -R 2>&1 &
+        wmd $WEBHOME -R 2>&1 &
+    else
+        wmd $WEBHOME 2>&1
+    fi
+fi
+
+if [ -d /startup ]; then
+    echo "🗂 Looking for startup scripts"
+    for script in /startup/* ; do
+        if [ -x $script ]; then
+            echo "  📜 Started $script in the background."
+            bash -c "sleep 0.2; . $script | sed -u 's@^@⚙️ ${script#/startup/}: @g'" &
+        fi
+    done
+    echo
+fi
+
+clear
+exec echo "$GREETING"

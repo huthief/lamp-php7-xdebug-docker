@@ -1,0 +1,19 @@
+# This file belongs to the project https://code.shin.company/php
+# Author:  Shin <shin@shin.company>
+# License: https://code.shin.company/php/blob/main/LICENSE
+################################################################################
+
+version: '3'
+services:
+
+  ##############################################################################
+
+  cli:
+    image: shinsenter/php:${PHP_VERSION:-8.2}-cli
+    extends:
+      file: common.yml
+      service: common-php
+    build:
+      context: ../src/php/cli
+
+################################################################################

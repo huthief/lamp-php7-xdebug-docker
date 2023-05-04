@@ -1,0 +1,4 @@
+#!/command/with-contenv bash
+wait-for-composer && wait-for-server
+echo; echo "🤖 Starting Hyperf Server"
+exec wdo hyperf start

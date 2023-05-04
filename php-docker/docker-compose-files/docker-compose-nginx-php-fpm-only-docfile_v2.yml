@@ -1,0 +1,44 @@
+version: "3.6"
+
+networks:
+    reverse-proxy:
+        external: true
+        name: reverse-proxy
+    net-nginx-php:
+        name: net-nginx-php
+
+services:
+    nginx:
+        image: nginx:alpine
+        container_name: web-nginx
+        restart: unless-stopped
+        networks:
+            - reverse-proxy
+            - net-nginx-php
+        #depends_on:
+        links:
+            - web-php
+        environment:
+            - TZ=Asia/Taipei
+        volumes:
+            - "./etc/nginx/${DOCFILE_HOST_NAME}/conf.d:/etc/nginx/conf.d"
+            - "./etc/nginx/${DOCFILE_HOST_NAME}/logs/default:/etc/nginx/logs/default"
+            - "./etc/nginx/${DOCFILE_HOST_NAME}/logs:/var/log/nginx/logs"
+            - "./var/www/html/docfile:/var/www/html" # 這個是伺服器服務的根，為了讓 nginx 看得到檔案
+        labels:
+            - "traefik.enable=true"
+            - "traefik.http.routers.${DOCFILE_TRAEFIK_ROUTERS_NAME}.entrypoints=${HTTP_ENTRY_POINTS}"
+            # - "traefik.http.routers.${DOCFILE_TRAEFIK_ROUTERS_NAME}.entrypoints=${HTTPS_ENTRY_POINTS}"
+            - "traefik.http.routers.${DOCFILE_TRAEFIK_ROUTERS_NAME}.rule=Host(`${DOCFILE_HOST_NAME}`)"
+    web-php:
+        image: cds/php-fpm-alpine
+        container_name: web-php
+        networks:
+            - net-nginx-php
+        environment:
+            - "ENV_SUBSTITUTION_ENABLE=true"
+        expose:
+            - "9000"
+        volumes:
+            - ./var/www/html/docfile:/var/www/html # 這個是伺服器服務的根，為了讓 php 看得到檔案
+

@@ -1,0 +1,2 @@
+#!/command/with-contenv bash
+wait-for-fpm 10 0.1 && exec nginx -g 'daemon off;'

@@ -1,0 +1,33 @@
+# This file belongs to the project https://code.shin.company/php
+# Author:  Shin <shin@shin.company>
+# License: https://code.shin.company/php/blob/main/LICENSE
+################################################################################
+
+version: '3'
+services:
+
+  ##############################################################################
+
+  fpm-apache:
+    image: shinsenter/phpfpm-apache:php${PHP_VERSION:-8.2}
+    extends:
+      file: common.yml
+      service: common-php
+    build:
+      context: ../src/servers/fpm-apache
+    ports:
+      - 9001:80
+
+  ##############################################################################
+
+  fpm-nginx:
+    image: shinsenter/phpfpm-nginx:php${PHP_VERSION:-8.2}
+    extends:
+      file: common.yml
+      service: common-php
+    build:
+      context: ../src/servers/fpm-nginx
+    ports:
+      - 9002:80
+
+################################################################################

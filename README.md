@@ -1,14 +1,59 @@
-## Docker-compose for PHP 7 with XDebug
+## Docker-compose for CDS Develop (PHP 7 with XDebug)
+
+- 最後更新日：2021.02.23
+
+#### ID/PWD
+
+- cdstest.fycd.info
+fycdadmin / 5281fycd
+
+- docfiletest.fycd.info
+fycdadmin / 5281fycd
+
+- mysql db
+root / !QAZ2wsx
+fycdcds / 1qaz522wsx81
 
 ### 一、Docker使用的版本
 
-* php:7.1.20-apache
-
-* mariadb:10.1
+* php:7.4.13-apache
+* mariadb:10.4.17
+* traefik
+* nginx-proxy:lastest (請使用有nginx的yml檔案)
+* redis:amd64/redis:6.0.10
 
 若要修改版本，請自行修改docker-compose.yml裡面的image來源
+注意：若使用traefik版本，請自行另外搭配traefik-docker使用
 
-### 二、設定說明
+#### 附註
+````bash
+docker network create -d bridge reverse-proxy
+````
+
+### 二、前置作業
+
+#### 1. 說明
+為了更加符合部署後情況，故採用 traefik / nginx進行reverse proxy作業
+請自行於本機hosts加入以下三個設定，修改時請留意檔案權限
+Windows系統，位置在 C:/Windows/System32/drivers/etc/hosts 
+Mac系統，位置在 /private/etc/hosts
+
+````bash
+#add for fycd test
+127.0.0.1 docfiledev.fycd.info cdsdev.fycd.info apidev.fycd.info
+````
+
+#### 2. 各系統對應網址
+1. 道親系統
+http://cdsdev.fycd.info
+
+2. 文書系統
+http://docfiledev.fycd.info
+
+3. 後端API服務
+http://apidev.fycd.info
+
+### 三、設定說明
 
 #### 1. 指定XDebug remote_host IP
 
@@ -22,7 +67,7 @@ xdebug.remote_host=192.168.173.31
 
 #### 2. 設定MySQL帳號密碼
 
-修改檔案:docker-compose.yml 中 MYSQL相關參數。可指定啟動後的root密碼與要新增的帳號/密碼
+修改檔案:docker-compose.yml 中 MYSQL相關參數。可指定啟動後的root密碼與要新增的帳號/密碼
 
 ```yml
 MYSQL_ALLOW_EMPTY_PASSWORD: "no"
@@ -35,7 +80,7 @@ MYSQL_DATABASE: 'SET_MYSQL_NEW_DATABASE'
 #### 3. 設定container啟動後，container的80,3306 port，要對定到實體機的port
 
 目前預設80, 3306都是對應到實體機的80,33076 port
-若要變更對應，請自行修改docker-compose.yml中port相關參數。
+若要變更對應，請自行修改docker-compose.yml中port相關參數。
 
 ```yml
 ports:
@@ -53,17 +98,17 @@ ports:
 
 啟動後，會使用到的php.ini檔，是放在./etc/php/php/ini檔案中。請自行依據需求調整
 
-#### 5. www首頁位置
+#### 5. www 首頁位置
 
 啟動後，www首頁位置是放在 ./var/www/html目錄中。請自行放置要使用的網頁檔案
 
-#### 6. MySQL檔案位置
+#### 6. MySQL檔案位置
 
-啟動後，MySQL檔案位置會統一在 ./var/lib/mysql。
+啟動後，MySQL檔案位置會統一在 ./var/lib/mysql。
 
 此目錄將來若要與其他Docker共用的話，只需對應到新的Docker的 /var/lib/mysql 即可
 
-### 三、Docker啟動使用說明
+### 四、Docker啟動使用說明
 
 #### 1. 安裝與啟動
 
@@ -81,11 +126,16 @@ $ docker-compose up -d
 $ docker-compose down
 ```
 
-**注意：**
+**注意(一)**
 
 若只是單存要停掉container而不一併刪除container的話，請用傳統的docker stop <container_ID> 的方式停用
 
-### 四、XDebug使用說明
+**注意(二)**
+若是啟動後可以執行，卻無法順利登入，請檢查一下以下目錄權限是否為777
+/var/www/html/api/logs
+/var/www/html/api/tmp
+
+### 五、XDebug使用說明
 
 以下以VSCode debug方式來說明。其他工具請自行參閱相關文件。
 
@@ -99,7 +149,7 @@ $ docker-compose down
 
 5. 使用瀏覽器開啟要除錯的網頁，VSCode就會停在所設定的中斷點
 
-### 五、附錄
+### 六、附錄
 
 #### MySQL相關作業
 
@@ -130,3 +180,8 @@ MariaDB [mysql]>FLUSH PRIVILEGES;
 
 在docker-compose.yml最後面，我們加入的phpmyadmin的docker image，使得管理MySQL更為方便
 只要連線到 [http://localhost:8088/phpmyadmin](http://localhost:8088/phpmyadmin) 即可
+
+或 可自行下載 phpMyAdmin的原始檔，並將之放到以下目錄即可 
+**{cds-docker目錄}/var/www/html/api/public**
+
+

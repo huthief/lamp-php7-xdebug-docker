@@ -1,0 +1,198 @@
+#!/bin/bash
+# This file belongs to the project https://code.shin.company/php
+# Author:  Shin <shin@shin.company>
+# License: https://code.shin.company/php/blob/main/LICENSE
+################################################################################
+
+# Check if Docker is installed
+[ ! -x "$(command -v docker)" ] \
+    && echo "Docker is not installed. Please install it and try again." \
+    && exit 1
+
+################################################################################
+
+# Variable to store the parsed instructions for an image
+PARSE_CACHE=
+
+# Extracts the repository name and tag of a Docker image
+d_name_id () {
+    # Use the docker images command to get a list of images, in a specific format
+    # Then grep for the image specified by the first argument
+    # Finally, take the first result
+    docker images --format "{{.Repository}}:{{.Tag}}\t{{.ID}}" \
+        | grep -F $1 | head -n1
+}
+
+# Parses instructions for an image from the local system
+d_local_history () {
+    # Use the docker history command to get the instructions for an image
+    # Then reverse the order of the instructions
+    # Finally, print all instructions
+    docker history --no-trunc --format "{{.CreatedBy}}" $1 \
+        | awk '{arr[i++]=$0}END{while(i>0)print arr[--i]}'
+}
+
+# Parses instructions for an image from a remote repository
+d_net_history () {
+    local repo="$1"
+    local tag="$2"
+    # Use curl to get the instructions for an image from the remote repository
+    # Then use jq to extract the instructions from the JSON data
+    curl -skL 'https://hub.docker.com/v2/repositories/$repo/tags/$tag/images' \
+        | jq '.[1].layers' | jq '.[].instruction' -r
+}
+
+# Parses instructions for an image, and replaces all occurrences of '/bin/sh -c #(nop)'
+d_parse() {
+    local history
+    if [ -z "$PARSE_CACHE" ]; then
+        # Get the instructions for the image specified by the first argument
+        history=$(d_local_history "$1")
+
+        # Replace all occurrences of '/bin/sh -c' with 'RUN'
+        # Replace all occurrences of '|[number]' with 'RUN'
+        # Remove all occurrences of 'RUN #(nop)'
+        # Modify the format of 'EXPOSE' instructions
+        # Fix formatting of SHELL instructions
+        # Move WORKDIR, ENTRYPOINT, CMD, and STOPSIGNAL instructions to the end
+        PARSE_CACHE=$(echo "$history" | sed 's/^\/[^ ]* *-c */RUN /' \
+            | sed 's/^|[0-9]* */RUN /' \
+            | sed 's/^RUN \#[^ ]* *//' \
+            | sed 's#EXPOSE map\[\(.*\):.*\]#EXPOSE \1#g' \
+            | awk '
+                {
+                    if($1=="SHELL"){
+                        gsub("\\\[","[\"",$0); gsub("\\\]","\"]",$0)
+                        i=1; printf("%s ",$i)
+                        while(i++<NF){
+                            if(i>2){printf("\", \"%s",$i)}else{printf("%s",$i)}
+                        }
+                        printf "\n"
+                    } else print $0
+                }' 2>/dev/null \
+            | awk '
+                {
+                    if(($1=="WORKDIR")||($1=="ENTRYPOINT")||($1=="CMD")||($1=="STOPSIGNAL"))
+                        {cmd[$1]=$0;if($1=="ENTRYPOINT")delete cmd["CMD"]}
+                    else print $0
+                } END {
+                    if(cmd["WORKDIR"])    print cmd["WORKDIR"]
+                    if(cmd["ENTRYPOINT"]) print cmd["ENTRYPOINT"]
+                    if(cmd["CMD"])        print cmd["CMD"]
+                    if(cmd["STOPSIGNAL"]) print cmd["STOPSIGNAL"]
+                }'
+        )
+    fi
+    echo "$PARSE_CACHE"
+}
+
+# Filter out the lines starting with the given instruction
+# (default is "ENV") and split the line by "=" character
+d_attr () {
+    # Filter the input and only keep the instruction
+    # that matches the given instruction type
+    d_parse "$1" \
+        | grep "^${2:-ENV}" \
+        | awk -F= '
+            # Extracting the key-value pairs from the
+            # instruction and storing it in an associative array
+            {a[$1]=substr($0,index($0,"=")+1)}
+            # Iterating through the associative array
+            # and printing the key-value pairs
+            # in the format key="value"
+            END{for(k in a)printf("%s=\"%s\"\n",k,a[k])}' \
+        | sort
+}
+
+# Extract the parsed instruction for the given image
+ins_cmd() {
+    # Filter out the instructions we're not interested in
+    d_parse "$1" \
+        | grep -v '^\(ADD\|ARG\|COPY\|ENV\|HEALTHCHECK\|LABEL\|ONBUILD\|RUN\)'
+}
+
+# aliases
+ins_name () { d_name_id $1 | awk '{printf $1}'; }
+ins_id   () { d_name_id $1 | awk '{printf $2}'; }
+
+# command aliases
+ins_env    () { d_attr  $1 ENV; }
+ins_labels () { d_attr  $1 LABEL; }
+ins_shell  () { ins_cmd $1 | grep    '^SHELL'; }
+ins_others () { ins_cmd $1 | grep -v '^SHELL'; }
+
+# Build minified image
+# @param $output Create a new Dockerfile (must be an existing file path)
+# @param $base   The original image (ID or name:tag)
+# @param $save   The target image name (optional)
+minify() {
+    PARSE_CACHE=
+    local output="$1" ; [ ! -z "$output" ] && [ -f "$output" ] && shift || output=""
+    local base="$1"   ; [ ! -z "$base"   ] && shift || return 1
+    local save="$1"   ; [ ! -z "$save"   ] && shift || save="${base}-tidy"
+    local repo="$(ins_name $base)" ; [ -z "$output" ] && [ -z "$repo" ] && echo "Invalid image ID $base" && return 1
+    local temp="$([ ! -z "$output" ]    && echo "$base" || echo "tidy-docker:build-$(ins_id $base)")"
+    local command="$([ ! -z "$output" ] && echo "tee $output" || echo "docker build $@ --rm -t $save -")"
+
+    # Make a temporary tag name for building image
+    [ -z "$output" ] && docker tag $base $temp 2>/dev/null
+
+    # Build or export a Dockerfile
+    echo "🗜 Start minifying image '$repo'"
+    echo "  Build arguments: $@"
+    DOCKER_BUILDKIT=${DOCKER_BUILDKIT:-1} $command <<Dockerfile
+# Input Image: "${base}"
+#        (aka: "${repo}")
+# Final Image: "${save}"
+# Dockerfile : "${output}"
+################################################################################
+# CLEANING UP THE SOURCE IMAGE. ################################################
+FROM shinsenter/scratch as scratch
+FROM ${temp} as tidy
+USER root
+RUN [ -x "\$(command -v cleanup)" ]  && cleanup                         || true
+RUN [ -x "\$(command -v apt-get)" ]  && apt-get -yq autoremove --purge  || true
+RUN [ -x "\$(command -v composer)" ] && composer clearcache -q --ansi   || true
+RUN [ -x "\$(command -v docker)" ]   && docker system prune -af         || true
+RUN [ -x "\$(command -v npm)" ]      && npm cache clean --force         || true
+RUN [ -x "\$(command -v yum)" ]      && yum clean all -y                || true
+RUN [ -x "\$(command -v rm)" ]       && rm -rf \\
+    ~/.wp-cli/ ~/.git/ ~/.composer/ ~/.npm/ ~/.cache/ ~/.log/ ~/.tmp/ \\
+    /usr/share/doc/* /tmp/* /var/tmp/* \\
+    /var/cache/apk /var/cache/yum /var/lib/apt/lists/* \\
+    /var/cache/apt/archives/*.deb \\
+    /var/cache/apt/archives/partial/*.deb \\
+    /var/cache/apt/*.bin \\
+    || true
+RUN [ -x "\$(command -v find)" ]     && find / \( \\
+    -name "._*" -or -name "*~" -or -name "*.swp" \\
+    -or -name ".git" -or -name ".svn" \\
+    -or -name ".DS_Store" \\
+    -or -name "Thumbs.db" -or -name "thumbs.db" \\
+    -or -name "*.pyc" -or -name "*.pyo" \\
+    -or -name "*pip*" -or -name "*__pycache__*" \\
+    -or -name "*easy_install*" -or -name "*dist-info*" \\
+    \) ! -path "/sys/*" ! -path "/proc/*" \\
+    | xargs rm -rf || true
+################################################################################
+# BUILDING OPTIMIZED IMAGE FROM SCRATCH. #####################################
+FROM  scratch
+COPY  --from=tidy / /
+$(ins_shell $base)
+$(ins_env $base)
+$(ins_others $base)
+LABEL org.opencontainers.image.title="$save"
+LABEL org.opencontainers.image.description="A tidied image of $repo"
+$(ins_labels $base)
+# FINISH. ######################################################################
+################################################################################
+Dockerfile
+
+    # Cleanup the temporary image
+    if [ $? -eq 0 ] && [ -z "$output" ]; then docker rmi "$temp" >/dev/null; fi
+}
+
+################################################################################
+
+echo ; date
+minify $@ && echo "Done." || echo "Failed."
